@@ -54,17 +54,6 @@ _ORT_TO_NP_TYPE = {
 }
 
 
-def _is_gpu_available():
-    """
-    Checks if a gpu is available.
-    """
-    available_providers = ort.get_available_providers()
-    if "CUDAExecutionProvider" in available_providers and torch.cuda.is_available():
-        return True
-    else:
-        return False
-
-
 def is_onnxruntime_training_available():
     """
     Checks if onnxruntime-training is available.
@@ -165,18 +154,30 @@ def get_device_for_provider(provider: str) -> torch.device:
     """
     Gets the PyTorch device (CPU/CUDA) associated with an ONNX Runtime provider.
     """
-    return (
-        torch.device("cuda:0")
-        if provider in ["CUDAExecutionProvider", "TensorrtExecutionProvider"]
-        else torch.device("cpu")
-    )
+
+    if provider in ["CUDAExecutionProvider", "TensorrtExecutionProvider"]:
+        return torch.device("cuda:0")
+    
+    if provider == "DmlExecutionProvider":
+        return torch.device("dml:0")
+
+    return torch.device("cpu")
 
 
 def get_provider_for_device(device: torch.device) -> str:
     """
     Gets the ONNX Runtime provider associated with the PyTorch device (CPU/CUDA).
     """
-    return "CUDAExecutionProvider" if device.type.lower() == "cuda" else "CPUExecutionProvider"
+
+    device_type = device.type.lower()
+
+    if device_type == "cuda":
+        return "CUDAExecutionProvider"
+    
+    if device_type == "dml":
+        return "DmlExecutionProvider"
+    
+    return "CPUExecutionProvider"
 
 
 def parse_device(device: Union[torch.device, str, int]) -> Tuple[torch.device, Dict]:
@@ -191,6 +192,12 @@ def parse_device(device: Union[torch.device, str, int]) -> Tuple[torch.device, D
     if device.type == "cuda":
         if device.index is None:
             device = torch.device("cuda:0")
+
+        provider_options["device_id"] = device.index
+
+    if device.type == "dml":
+        if device.index is None:
+            device = torch.device("dml:0")
 
         provider_options["device_id"] = device.index
 

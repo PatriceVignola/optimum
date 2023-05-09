@@ -90,7 +90,7 @@ def main_export(
         device (`str`, defaults to `"cpu"`):
             The device to use to do the export. Defaults to "cpu".
         fp16 (`Optional[bool]`, defaults to `"False"`):
-            Use half precision during the export. PyTorch-only, requires `device="cuda"`.
+            Use half precision during the export. PyTorch-only, requires `device="cuda"` or `device="dml"`.
         optimize (`Optional[str]`, defaults to `None`):
             Allows to run ONNX Runtime optimizations directly during the export. Some of these optimizations are specific to
             ONNX Runtime, and the resulting ONNX will not be usable with other runtime as OpenVINO or TensorRT.
@@ -308,10 +308,10 @@ def main_export(
         dtype="fp16" if fp16 is True else None,
     )
 
-    if optimize == "O4" and device != "cuda":
+    if optimize == "O4" and device not in ["cuda", "dml"]:
         raise ValueError(
             "Requested O4 optimization, but this optimization requires to do the export on GPU."
-            " Please pass the argument `--device cuda`."
+            " Please pass the argument `--device cuda` or `--device dml`."
         )
 
     if optimize is not None:
