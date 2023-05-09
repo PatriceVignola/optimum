@@ -152,7 +152,7 @@ def wrap_onnx_config_for_loss(onnx_config: OnnxConfig) -> OnnxConfig:
 
 def get_device_for_provider(provider: str) -> torch.device:
     """
-    Gets the PyTorch device (CPU/CUDA) associated with an ONNX Runtime provider.
+    Gets the PyTorch device (CPU/CUDA/DML) associated with an ONNX Runtime provider.
     """
 
     if provider in ["CUDAExecutionProvider", "TensorrtExecutionProvider"]:
@@ -166,7 +166,7 @@ def get_device_for_provider(provider: str) -> torch.device:
 
 def get_provider_for_device(device: torch.device) -> str:
     """
-    Gets the ONNX Runtime provider associated with the PyTorch device (CPU/CUDA).
+    Gets the ONNX Runtime provider associated with the PyTorch device (CPU/CUDA/DML).
     """
 
     device_type = device.type.lower()
