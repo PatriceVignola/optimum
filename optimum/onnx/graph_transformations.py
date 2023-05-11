@@ -147,7 +147,7 @@ def merge_decoders(
                 raise ValueError("Expected attention_mask second axis to be dynamic and named `sequence_length`.")
             inp.type.tensor_type.shape.dim[1].dim_param = "attention_mask_sequence_length"
 
-    deduplicated_initializers = _deduplicated_cross_model_initializers([decoder, decoder_with_past], suffix=graph_name)
+    deduplicated_initializers = _deduplicated_cross_model_initializers([decoder, decoder_with_past])
 
     # Keep initializers of dim 0 (or dim 1 + int32/int64) in subgraphs for readability purposes, and also because
     # ONNX Runtime breaks after optimization + merge if they are not
@@ -211,19 +211,7 @@ def merge_decoders(
 
     # for large models, a path must be provided instead of a ModelProto:
     # https://github.com/onnx/onnx/blob/main/docs/PythonAPIOverview.md#checking-a-large-onnx-model-2gb
-    if merged_model.ByteSize() < onnx.checker.MAXIMUM_PROTOBUF:
-        # For the try catch, refer to https://github.com/microsoft/onnxruntime/issues/14768
-        try:
-            onnx.checker.check_model(merged_model)
-        except Exception as e:
-            if "No Op registered for" in str(e):
-                pass
-            else:
-                raise e
-        if save_path:
-            save_path = Path(save_path).as_posix()
-            onnx.save(merged_model, save_path)
-    elif save_path is not None:
+    if save_path is not None:
         save_path = Path(save_path).as_posix()
         onnx.save(
             merged_model,
