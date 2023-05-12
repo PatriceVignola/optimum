@@ -213,7 +213,7 @@ def validate_model_outputs(
     session_options.graph_optimization_level = GraphOptimizationLevel.ORT_ENABLE_BASIC
 
     if device.startswith("cuda"):
-        provider = "CUDAExecutionProvider"
+        provider = "DmlExecutionProvider"
     else:
         provider = "CPUExecutionProvider"
 

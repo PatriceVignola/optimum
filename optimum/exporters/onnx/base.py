@@ -251,7 +251,7 @@ class OnnxConfig(ExportConfig, ABC):
             allowed_dynamic_axes |= set(output.values())
 
         if device.startswith("cuda"):
-            providers = ["CUDAExecutionProvider"]
+            providers = ["DmlExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
 

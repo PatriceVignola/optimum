@@ -408,7 +408,7 @@ class ORTSeq2SeqTrainer(ORTTrainer):
         args = self.args
         # Load ORT model
         self.ort_model = ORTModelForSeq2SeqLM.from_pretrained(
-            model_id=self.onnx_model_path, provider="CUDAExecutionProvider"
+            model_id=self.onnx_model_path, provider="DmlExecutionProvider"
         )
 
         if not has_length(dataloader):

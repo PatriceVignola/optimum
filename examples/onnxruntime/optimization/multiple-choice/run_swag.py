@@ -219,7 +219,7 @@ def main():
     if (
         optim_args.optimization_level > 1
         and not optim_args.optimize_for_gpu
-        and model_args.execution_provider == "CUDAExecutionProvider"
+        and model_args.execution_provider == "DmlExecutionProvider"
     ):
         raise ValueError(
             f"Optimization level is set at {optim_args.optimization_level} and "

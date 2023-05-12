@@ -59,7 +59,7 @@ def _is_gpu_available():
     Checks if a gpu is available.
     """
     available_providers = ort.get_available_providers()
-    if "CUDAExecutionProvider" in available_providers and torch.cuda.is_available():
+    if "DmlExecutionProvider" in available_providers and torch.cuda.is_available():
         return True
     else:
         return False
@@ -167,7 +167,7 @@ def get_device_for_provider(provider: str) -> torch.device:
     """
     return (
         torch.device("cuda:0")
-        if provider in ["CUDAExecutionProvider", "TensorrtExecutionProvider"]
+        if provider in ["DmlExecutionProvider", "TensorrtExecutionProvider"]
         else torch.device("cpu")
     )
 
@@ -176,7 +176,7 @@ def get_provider_for_device(device: torch.device) -> str:
     """
     Gets the ONNX Runtime provider associated with the PyTorch device (CPU/CUDA).
     """
-    return "CUDAExecutionProvider" if device.type.lower() == "cuda" else "CPUExecutionProvider"
+    return "DmlExecutionProvider" if device.type.lower() == "cuda" else "CPUExecutionProvider"
 
 
 def parse_device(device: Union[torch.device, str, int]) -> Tuple[torch.device, Dict]:
@@ -205,7 +205,7 @@ def validate_provider_availability(provider: str):
         provider (str): Name of an ONNX Runtime execution provider.
     """
     # disable on Windows as reported in https://github.com/huggingface/optimum/issues/769
-    if os.name != "nt" and provider in ["CUDAExecutionProvider", "TensorrtExecutionProvider"]:
+    if os.name != "nt" and provider in ["DmlExecutionProvider", "TensorrtExecutionProvider"]:
         path_cuda_lib = os.path.join(ort.__path__[0], "capi", "libonnxruntime_providers_cuda.so")
         path_trt_lib = os.path.join(ort.__path__[0], "capi", "libonnxruntime_providers_tensorrt.so")
         path_dependecy_loading = os.path.join(ort.__path__[0], "capi", "_ld_preload.py")

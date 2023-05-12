@@ -260,7 +260,7 @@ class ORTQuantizer(OptimumQuantizer):
             )
 
         if use_gpu:
-            self._calibrator.set_execution_providers(execution_providers=["CUDAExecutionProvider"])
+            self._calibrator.set_execution_providers(execution_providers=["DmlExecutionProvider"])
 
         LOGGER.info("Collecting tensors statistics...")
         reader = ORTCalibrationDataReader(dataset, batch_size)
