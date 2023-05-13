@@ -159,7 +159,7 @@ def get_device_for_provider(provider: str) -> torch.device:
         return torch.device("cuda:0")
     
     if provider == "DmlExecutionProvider":
-        return torch.device("dml:0")
+        return torch.device("cpu")
 
     return torch.device("cpu")
 
@@ -174,7 +174,7 @@ def get_provider_for_device(device: torch.device) -> str:
     if device_type == "cuda":
         return "CUDAExecutionProvider"
     
-    if device_type == "dml":
+    if device_type == "cpu":
         return "DmlExecutionProvider"
     
     return "CPUExecutionProvider"
@@ -195,9 +195,9 @@ def parse_device(device: Union[torch.device, str, int]) -> Tuple[torch.device, D
 
         provider_options["device_id"] = device.index
 
-    if device.type == "dml":
+    if device.type == "cpu":
         if device.index is None:
-            device = torch.device("dml:0")
+            device = torch.device("cpu")
 
         provider_options["device_id"] = device.index
 

@@ -214,7 +214,7 @@ def validate_model_outputs(
 
     if device.startswith("cuda"):
         provider = "CUDAExecutionProvider"
-    elif device.startswith("dml"):
+    elif device.startswith("cpu"):
         provider = "DmlExecutionProvider"
     else:
         provider = "CPUExecutionProvider"
@@ -424,7 +424,7 @@ def export_pytorch(
         if device.type == "cuda" and torch.cuda.is_available():
             model.to(device)
             dummy_inputs = tree_map(remap, dummy_inputs)
-        elif device.type == "dml" and torch.dml.is_available():
+        elif device.type == "cpu":
             model.to(device)
             dummy_inputs = tree_map(remap, dummy_inputs)
 
@@ -713,7 +713,7 @@ def export(
         )
 
     elif is_tf_available() and issubclass(type(model), TFPreTrainedModel):
-        if device in ["cuda", "dml"]:
+        if device in ["cuda", "cpu"]:
             raise RuntimeError("`tf2onnx` does not support export on CUDA or DML devices.")
         if input_shapes is not None:
             logger.info("`input_shapes` argument is not supported by the Tensorflow ONNX export and will be ignored.")
