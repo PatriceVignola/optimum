@@ -921,8 +921,7 @@ class ORTModelForFeatureExtraction(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             if attention_mask is None:
                 attention_mask = torch.ones_like(input_ids)
 
@@ -1035,8 +1034,7 @@ class ORTModelForMaskedLM(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1144,8 +1142,7 @@ class ORTModelForQuestionAnswering(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1273,8 +1270,7 @@ class ORTModelForSequenceClassification(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1380,8 +1376,7 @@ class ORTModelForTokenClassification(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1484,8 +1479,7 @@ class ORTModelForMultipleChoice(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1593,8 +1587,7 @@ class ORTModelForImageClassification(ORTModel):
         use_torch = isinstance(pixel_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 pixel_values, ordered_input_names=self._ordered_input_names
             )
@@ -1689,8 +1682,7 @@ class ORTModelForSemanticSegmentation(ORTModel):
         use_torch = isinstance(next(iter(kwargs.values())), torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding = IOBindingHelper.prepare_io_binding(
                 self,
                 **kwargs,
@@ -1807,8 +1799,7 @@ class ORTModelForAudioClassification(ORTModel):
         use_torch = isinstance(input_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_values, ordered_input_names=self._ordered_input_names
             )
@@ -1986,8 +1977,7 @@ class ORTModelForAudioXVector(ORTModel):
         use_torch = isinstance(input_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_values, ordered_input_names=self._ordered_input_names
             )
@@ -2160,8 +2150,7 @@ class ORTModelForCustomTasks(ORTModel):
         use_torch = isinstance(next(iter(kwargs.values())), torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
+        if self.device.type == "cuda" and self.use_io_binding:
             io_binding = IOBindingHelper.prepare_io_binding(
                 self,
                 **kwargs,

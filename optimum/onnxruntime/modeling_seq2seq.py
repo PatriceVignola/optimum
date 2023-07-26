@@ -300,8 +300,7 @@ class ORTEncoderForSpeech(ORTEncoder):
         use_torch = isinstance(input_features, torch.Tensor)
         self.parent_model.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.parent_model.device.type == "cuda" or self.parent_model.device.type == "privateuseone") and self.parent_model.use_io_binding:
+        if self.parent_model.device.type == "cuda" and self.parent_model.use_io_binding:
             model_inputs = (
                 [input_features, attention_mask] if "attention_mask" in self.input_names else [input_features]
             )
@@ -360,8 +359,7 @@ class ORTEncoderForVisionEncoderDecoder(ORTEncoder):
         use_torch = isinstance(pixel_values, torch.Tensor)
         self.parent_model.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.parent_model.device.type == "cuda" or self.parent_model.device.type == "privateuseone") and self.parent_model.use_io_binding:
+        if self.parent_model.device.type == "cuda" and self.parent_model.use_io_binding:
             io_binding, output_shapes, output_buffers = self.parent_model._prepare_io_binding(
                 self.session, pixel_values, ordered_input_names=self._ordered_input_names
             )

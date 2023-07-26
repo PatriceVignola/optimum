@@ -83,8 +83,7 @@ class ORTEncoder(ORTModelPart):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.parent_model.raise_on_numpy_input_io_binding(use_torch)
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.parent_model.use_io_binding:
+        if self.device.type == "cuda" and self.parent_model.use_io_binding:
             model_inputs = [input_ids]
             if "attention_mask" in self.input_names:
                 model_inputs.append(attention_mask)
@@ -537,8 +536,7 @@ class ORTDecoderForSeq2Seq(ORTDecoder):
             input_ids, past_key_values, use_torch=use_torch
         )
 
-        # TODO (pavignol): Make sure that privateuseone is a DML device
-        if (self.parent_model.device.type == "cuda" or self.parent_model.device.type == "privateuseone") and self.parent_model.use_io_binding:
+        if self.parent_model.device.type == "cuda" and self.parent_model.use_io_binding:
             known_output_shapes = self.compute_past_key_values_output_shapes(
                 input_ids,
                 encoder_hidden_states,
