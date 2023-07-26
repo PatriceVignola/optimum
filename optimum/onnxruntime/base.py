@@ -362,7 +362,7 @@ class ORTDecoder(ORTModelPart):
                 if isinstance(output_buffers[name], OrtValue):
                     past_key_values += (output_buffers[name],)
                 else:
-                    assert isinstance(output_buffers[name], torch.Tensor)
+                    assert isinstance(output_buffers[name], torch.FloatTensor)
                     past_key_values += (output_buffers[name].view(output_shapes[name]),)
 
             # Tuple of tuple of length `n_layers`, with each tuple of length equal to 2 (self-attention key and value per decoder layer)

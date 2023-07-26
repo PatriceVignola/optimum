@@ -480,7 +480,7 @@ class ORTModelForConditionalGeneration(ORTModel, ABC):
         ABC.__init__(self)
 
         if use_io_binding is None:
-            if decoder_session.get_providers()[0] in ("CUDAExecutionProvider", "DmlExecutionProvider"):
+            if decoder_session.get_providers()[0] == "CUDAExecutionProvider":
                 use_io_binding = True
             else:
                 use_io_binding = False
@@ -523,9 +523,9 @@ class ORTModelForConditionalGeneration(ORTModel, ABC):
 
         if use_cache is False and use_io_binding is True:
             raise ValueError(
-                "When using CUDAExecutionProvider or DmlExecutionProvider, the parameters combination"
-                " use_cache=False, use_io_binding=True is not supported. Please either pass use_cache=True,"
-                " use_io_binding=True (default), or use_cache=False, use_io_binding=False."
+                "When using CUDAExecutionProvider, the parameters combination use_cache=False, use_io_binding=True"
+                " is not supported. Please either pass use_cache=True, use_io_binding=True (default),"
+                " or use_cache=False, use_io_binding=False."
             )
 
         self.use_merged = use_merged

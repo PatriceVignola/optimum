@@ -66,7 +66,7 @@ from .io_binding import IOBindingHelper, TypeHelper
 from .utils import (
     ONNX_WEIGHTS_NAME,
     check_io_binding,
-    get_torch_device_for_provider,
+    get_device_for_provider,
     get_ordered_input_names,
     get_provider_for_device,
     parse_device,
@@ -207,7 +207,7 @@ class ORTModel(OptimizedModel):
             )
 
         self.providers = model.get_providers()
-        self._device = get_torch_device_for_provider(
+        self._device = get_device_for_provider(
             self.providers[0], provider_options=model.get_provider_options()[self.providers[0]]
         )
 
@@ -780,6 +780,7 @@ class ORTModel(OptimizedModel):
                     # that the tensor is on the CPU (only happens during the first iteration)
                     io_binding.bind_cpu_input(name, tensor.numpy())
             else:
+                assert isinstance(tensor, torch.Tensor)
                 tensor = tensor.contiguous()
                 input_name_to_shape[name] = tensor.shape
                 io_binding.bind_input(
@@ -1798,7 +1799,6 @@ class ORTModelForAudioClassification(ORTModel):
     ):
         use_torch = isinstance(input_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
-
         if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_values, ordered_input_names=self._ordered_input_names
@@ -1976,7 +1976,6 @@ class ORTModelForAudioXVector(ORTModel):
     ):
         use_torch = isinstance(input_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
-
         if self.device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_values, ordered_input_names=self._ordered_input_names

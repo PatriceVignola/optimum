@@ -58,7 +58,7 @@ EXTRAS_REQUIRE = {
     ],
     "onnxruntime-directml": [
         "onnx",
-        "onnxruntime-directml>=1.15.1",
+        "onnxruntime-directml>=1.16.0",
         "datasets>=1.2.1",
         "evaluate",
         "protobuf>=3.20.1",

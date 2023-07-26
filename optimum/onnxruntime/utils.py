@@ -173,7 +173,7 @@ def wrap_onnx_config_for_loss(onnx_config: OnnxConfig) -> OnnxConfig:
     return OnnxConfigWithLoss(onnx_config)
 
 
-def get_torch_device_for_provider(provider: str, provider_options: Dict) -> torch.device:
+def get_device_for_provider(provider: str, provider_options: Dict) -> torch.device:
     """
     Gets the PyTorch device (CPU/CUDA) associated with an ONNX Runtime provider.
     """
@@ -183,29 +183,11 @@ def get_torch_device_for_provider(provider: str, provider_options: Dict) -> torc
         return torch.device("cpu")
 
 
-def get_device_type_for_provider(provider: str, provider_options: Dict) -> torch.device:
-    """
-    Gets the PyTorch device (CPU/CUDA) associated with an ONNX Runtime provider.
-    """
-    if provider in ["CUDAExecutionProvider", "TensorrtExecutionProvider"]:
-        return "cuda"
-    elif provider == "DmlExecutionProvider":
-        return "dml"
-    else:
-        return "cpu"
-
-
 def get_provider_for_device(device: torch.device) -> str:
     """
     Gets the ONNX Runtime provider associated with the PyTorch device (CPU/CUDA).
     """
-    if device.type.lower() == "cuda":
-        return "CUDAExecutionProvider"
-
-    if device.type.lower() == "dml":
-        return "DmlExecutionProvider"
-
-    return "CPUExecutionProvider"
+    return "CUDAExecutionProvider" if device.type.lower() == "cuda" else "CPUExecutionProvider"
 
 
 def parse_device(device: Union[torch.device, str, int]) -> Tuple[torch.device, Dict]:
