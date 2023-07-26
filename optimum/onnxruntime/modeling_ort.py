@@ -69,6 +69,7 @@ from .utils import (
     get_device_for_provider,
     get_ordered_input_names,
     get_provider_for_device,
+    is_pytorch_io_binding_supported_for_provider,
     parse_device,
     validate_provider_availability,
 )
@@ -210,6 +211,8 @@ class ORTModel(OptimizedModel):
         self._device = get_device_for_provider(
             self.providers[0], provider_options=model.get_provider_options()[self.providers[0]]
         )
+
+        self.pytorch_io_binding_supported = is_pytorch_io_binding_supported_for_provider(self.providers[0])
 
         # This attribute is needed to keep one reference on the temporary directory, since garbage collecting it
         # would end-up removing the directory containing the underlying ONNX model.
@@ -671,17 +674,17 @@ class ORTModel(OptimizedModel):
         ort_type = TypeHelper.get_output_type(model, output_name)
         torch_type = TypeHelper.ort_type_to_torch_type(ort_type)
 
-        # logits and loss cannot be bound to DML since they will need to be downloaded to the CPU in order to be used by
-        # the pytorch postprocessing code
-        if self.providers[0] == "DmlExecutionProvider" and output_name not in ("loss", "logits"):
-            np_type = TypeHelper.ort_type_to_numpy_type(ort_type)
-            output_buffer = ort.OrtValue.ortvalue_from_shape_and_type(output_shape, np_type, "dml")
-        else:
+        # logits and loss always need to be bound to a PyTorch tensors since they need to be processed by the PyTorch code
+        # between iterations. This will incur a GPU->CPU copy overhead when pytorch_io_binding_supported==False.
+        if self.pytorch_io_binding_supported or output_name in ("loss", "logits"):
             if len(output_shape) > 0:
                 output_buffer = torch.empty(np.prod(output_shape), dtype=torch_type, device=self.device).contiguous()
             else:
                 # Case when the output is a scalar
                 output_buffer = torch.tensor(0, dtype=torch_type, device=self.device).contiguous()
+        else:
+            np_type = TypeHelper.ort_type_to_numpy_type(ort_type)
+            output_buffer = ort.OrtValue.ortvalue_from_shape_and_type(output_shape, np_type, "dml")
 
         return output_buffer
 
@@ -767,19 +770,7 @@ class ORTModel(OptimizedModel):
                 continue
             name = ordered_input_names[idx]
 
-            if self.providers[0] == "DmlExecutionProvider":
-                if isinstance(tensor, ort.OrtValue):
-                    input_name_to_shape[name] = tensor.shape()
-                    io_binding.bind_ortvalue_input(name, tensor)
-                else:
-                    assert isinstance(tensor, torch.Tensor)
-                    tensor = tensor.contiguous()
-                    input_name_to_shape[name] = tensor.shape
-
-                    # Since DML doesn't support ORT <-> PyTorch IO binding, a non-ortvalue automatically means
-                    # that the tensor is on the CPU
-                    io_binding.bind_cpu_input(name, tensor.numpy())
-            else:
+            if self.pytorch_io_binding_supported:
                 assert isinstance(tensor, torch.Tensor)
                 tensor = tensor.contiguous()
                 input_name_to_shape[name] = tensor.shape
@@ -791,6 +782,18 @@ class ORTModel(OptimizedModel):
                     tuple(tensor.shape),
                     tensor.data_ptr(),
                 )
+            else:
+                if isinstance(tensor, ort.OrtValue):
+                    input_name_to_shape[name] = tensor.shape()
+                    io_binding.bind_ortvalue_input(name, tensor)
+                else:
+                    assert isinstance(tensor, torch.Tensor)
+                    tensor = tensor.contiguous()
+                    input_name_to_shape[name] = tensor.shape
+
+                    # Since ORT <-> PyTorch IO binding isn't supported, a non-ortvalue automatically means
+                    # that the tensor is on the CPU
+                    io_binding.bind_cpu_input(name, tensor.numpy())
         dimensions = {}
         for input_ in model.get_inputs():
             shape = input_.shape

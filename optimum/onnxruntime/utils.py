@@ -183,6 +183,15 @@ def get_device_for_provider(provider: str, provider_options: Dict) -> torch.devi
         return torch.device("cpu")
 
 
+def is_pytorch_io_binding_supported_for_provider(provider: str) -> bool:
+    """
+    Returns whether PyTorch I/O binding is supported for the ONNX Runtime provider. If it's not supported but the user
+    requested use_io_binding, we will leverage ORT I/O binding via OrtValues instead of torch tensors. This partial
+    I/O binding can avoid copying the vast majority of tensors back to the CPU (e.g. past/present key/values).
+    """
+    return provider != "DmlExecutionProvider"
+
+
 def get_provider_for_device(device: torch.device) -> str:
     """
     Gets the ONNX Runtime provider associated with the PyTorch device (CPU/CUDA).
