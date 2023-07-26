@@ -66,7 +66,7 @@ from .io_binding import IOBindingHelper, TypeHelper
 from .utils import (
     ONNX_WEIGHTS_NAME,
     check_io_binding,
-    get_device_for_provider,
+    get_torch_device_for_provider,
     get_ordered_input_names,
     get_provider_for_device,
     parse_device,
@@ -157,7 +157,8 @@ class ORTModel(OptimizedModel):
         - model (`ort.InferenceSession`) -- The ONNX Runtime InferenceSession that is running the model.
         - config ([`~transformers.PretrainedConfig`] -- The configuration of the model.
         - use_io_binding (`bool`, *optional*, defaults to `True`) -- Whether to use I/O bindings with **ONNX Runtime
-        with the CUDAExecutionProvider**, this can significantly speedup inference depending on the task.
+        with the CUDAExecutionProvider or the DmlExecutionProvider**, this can significantly speedup inference
+        depending on the task.
         - model_save_dir (`Path`) -- The directory where the model exported to ONNX is saved.
         By defaults, if the loaded model is local, the directory where the original model will be used. Otherwise, the
         cache directory is used.
@@ -206,7 +207,7 @@ class ORTModel(OptimizedModel):
             )
 
         self.providers = model.get_providers()
-        self._device = get_device_for_provider(
+        self._device = get_torch_device_for_provider(
             self.providers[0], provider_options=model.get_provider_options()[self.providers[0]]
         )
 
@@ -254,7 +255,7 @@ class ORTModel(OptimizedModel):
         super().__init__(model, config)
 
         if use_io_binding is None:
-            if model.get_providers()[0] == "CUDAExecutionProvider":
+            if model.get_providers()[0] in ("CUDAExecutionProvider", "DmlExecutionProvider"):
                 use_io_binding = True
             else:
                 use_io_binding = False
@@ -629,7 +630,7 @@ class ORTModel(OptimizedModel):
             for each provider: https://onnxruntime.ai/docs/api/c/group___global.html .
         use_io_binding (`Optional[bool]`, defaults to `None`):
             Whether to use IOBinding during inference to avoid memory copy between the host and device, or between numpy/torch tensors and ONNX Runtime ORTValue. Defaults to
-            `True` if the execution provider is CUDAExecutionProvider. For [~onnxruntime.ORTModelForCausalLM], defaults to `True` on CPUExecutionProvider,
+            `True` if the execution provider is CUDAExecutionProvider or DmlExecutionProvider. For [~onnxruntime.ORTModelForCausalLM], defaults to `True` on CPUExecutionProvider,
             in all other cases defaults to `False`.
         kwargs (`Dict[str, Any]`):
             Will be passed to the underlying model loading methods.
@@ -669,11 +670,19 @@ class ORTModel(OptimizedModel):
         """Prepares the buffer of output_name with a 1D tensor."""
         ort_type = TypeHelper.get_output_type(model, output_name)
         torch_type = TypeHelper.ort_type_to_torch_type(ort_type)
-        if len(output_shape) > 0:
-            output_buffer = torch.empty(np.prod(output_shape), dtype=torch_type, device=self.device).contiguous()
+
+        # logits and loss cannot be bound to DML since they will need to be downloaded to the CPU in order to be used by
+        # the pytorch postprocessing code
+        if self.providers[0] == "DmlExecutionProvider" and output_name not in ("loss", "logits"):
+            np_type = TypeHelper.ort_type_to_numpy_type(ort_type)
+            output_buffer = ort.OrtValue.ortvalue_from_shape_and_type(output_shape, np_type, "dml")
         else:
-            # Case when the output is a scalar
-            output_buffer = torch.tensor(0, dtype=torch_type, device=self.device).contiguous()
+            if len(output_shape) > 0:
+                output_buffer = torch.empty(np.prod(output_shape), dtype=torch_type, device=self.device).contiguous()
+            else:
+                # Case when the output is a scalar
+                output_buffer = torch.tensor(0, dtype=torch_type, device=self.device).contiguous()
+
         return output_buffer
 
     def _output_shape_inference(self, axis_name: Union[str, int], dimensions: Dict[str, int]) -> Union[str, int]:
@@ -722,7 +731,7 @@ class ORTModel(OptimizedModel):
     def _prepare_io_binding(
         self,
         model: ort.InferenceSession,
-        *model_inputs: torch.Tensor,
+        *model_inputs: Union[torch.Tensor, ort.OrtValue],
         ordered_input_names: List[str],
         known_output_shapes: Optional[Dict[str, Tuple[int]]] = None,
         outputs_to_not_bind: Optional[Union[Set[str], str]] = None,
@@ -757,16 +766,30 @@ class ORTModel(OptimizedModel):
             if tensor is None:
                 continue
             name = ordered_input_names[idx]
-            tensor = tensor.contiguous()
-            input_name_to_shape[name] = tensor.shape
-            io_binding.bind_input(
-                name,
-                tensor.device.type,
-                IOBindingHelper.get_device_index(self.device),
-                name_to_np_type[name],
-                tuple(tensor.shape),
-                tensor.data_ptr(),
-            )
+
+            if self.providers[0] == "DmlExecutionProvider":
+                if isinstance(tensor, ort.OrtValue):
+                    input_name_to_shape[name] = tensor.shape()
+                    io_binding.bind_ortvalue_input(name, tensor)
+                else:
+                    assert isinstance(tensor, torch.Tensor)
+                    tensor = tensor.contiguous()
+                    input_name_to_shape[name] = tensor.shape
+
+                    # Since DML doesn't support ORT <-> PyTorch IO binding, a non-ortvalue automatically means
+                    # that the tensor is on the CPU (only happens during the first iteration)
+                    io_binding.bind_cpu_input(name, tensor.numpy())
+            else:
+                tensor = tensor.contiguous()
+                input_name_to_shape[name] = tensor.shape
+                io_binding.bind_input(
+                    name,
+                    tensor.device.type,
+                    IOBindingHelper.get_device_index(self.device),
+                    name_to_np_type[name],
+                    tuple(tensor.shape),
+                    tensor.data_ptr(),
+                )
         dimensions = {}
         for input_ in model.get_inputs():
             shape = input_.shape
@@ -796,16 +819,20 @@ class ORTModel(OptimizedModel):
                 for axis_name in output_node.shape:
                     output_shape.append(self._output_shape_inference(axis_name, dimensions))
             output_buffer = self._prepare_output_buffer(model, output_shape, output_name)
-
-            io_binding.bind_output(
-                output_name,
-                output_buffer.device.type,
-                IOBindingHelper.get_device_index(self.device),
-                name_to_np_type[output_name],
-                output_shape,
-                output_buffer.data_ptr(),
-            )
             output_shapes[output_name] = output_shape
+
+            if isinstance(output_buffer, ort.OrtValue):
+                io_binding.bind_ortvalue_output(output_name, output_buffer)
+            else:
+                io_binding.bind_output(
+                    output_name,
+                    output_buffer.device.type,
+                    IOBindingHelper.get_device_index(self.device),
+                    name_to_np_type[output_name],
+                    output_shape,
+                    output_buffer.data_ptr(),
+                )
+
             output_buffers[output_name] = output_buffer
 
         return io_binding, output_shapes, output_buffers
@@ -894,7 +921,8 @@ class ORTModelForFeatureExtraction(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             if attention_mask is None:
                 attention_mask = torch.ones_like(input_ids)
 
@@ -1007,7 +1035,8 @@ class ORTModelForMaskedLM(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1115,7 +1144,8 @@ class ORTModelForQuestionAnswering(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1243,7 +1273,8 @@ class ORTModelForSequenceClassification(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1349,7 +1380,8 @@ class ORTModelForTokenClassification(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1452,7 +1484,8 @@ class ORTModelForMultipleChoice(ORTModel):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids,
                 attention_mask,
@@ -1560,7 +1593,8 @@ class ORTModelForImageClassification(ORTModel):
         use_torch = isinstance(pixel_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 pixel_values, ordered_input_names=self._ordered_input_names
             )
@@ -1655,7 +1689,8 @@ class ORTModelForSemanticSegmentation(ORTModel):
         use_torch = isinstance(next(iter(kwargs.values())), torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding = IOBindingHelper.prepare_io_binding(
                 self,
                 **kwargs,
@@ -1771,7 +1806,9 @@ class ORTModelForAudioClassification(ORTModel):
     ):
         use_torch = isinstance(input_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
-        if self.device.type == "cuda" and self.use_io_binding:
+
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_values, ordered_input_names=self._ordered_input_names
             )
@@ -1948,7 +1985,9 @@ class ORTModelForAudioXVector(ORTModel):
     ):
         use_torch = isinstance(input_values, torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
-        if self.device.type == "cuda" and self.use_io_binding:
+
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_values, ordered_input_names=self._ordered_input_names
             )
@@ -2121,7 +2160,8 @@ class ORTModelForCustomTasks(ORTModel):
         use_torch = isinstance(next(iter(kwargs.values())), torch.Tensor)
         self.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.use_io_binding:
             io_binding = IOBindingHelper.prepare_io_binding(
                 self,
                 **kwargs,

@@ -173,7 +173,7 @@ def wrap_onnx_config_for_loss(onnx_config: OnnxConfig) -> OnnxConfig:
     return OnnxConfigWithLoss(onnx_config)
 
 
-def get_device_for_provider(provider: str, provider_options: Dict) -> torch.device:
+def get_torch_device_for_provider(provider: str, provider_options: Dict) -> torch.device:
     """
     Gets the PyTorch device (CPU/CUDA) associated with an ONNX Runtime provider.
     """
@@ -183,11 +183,29 @@ def get_device_for_provider(provider: str, provider_options: Dict) -> torch.devi
         return torch.device("cpu")
 
 
+def get_device_type_for_provider(provider: str, provider_options: Dict) -> torch.device:
+    """
+    Gets the PyTorch device (CPU/CUDA) associated with an ONNX Runtime provider.
+    """
+    if provider in ["CUDAExecutionProvider", "TensorrtExecutionProvider"]:
+        return "cuda"
+    elif provider == "DmlExecutionProvider":
+        return "dml"
+    else:
+        return "cpu"
+
+
 def get_provider_for_device(device: torch.device) -> str:
     """
     Gets the ONNX Runtime provider associated with the PyTorch device (CPU/CUDA).
     """
-    return "CUDAExecutionProvider" if device.type.lower() == "cuda" else "CPUExecutionProvider"
+    if device.type.lower() == "cuda":
+        return "CUDAExecutionProvider"
+
+    if device.type.lower() == "dml":
+        return "DmlExecutionProvider"
+
+    return "CPUExecutionProvider"
 
 
 def parse_device(device: Union[torch.device, str, int]) -> Tuple[torch.device, Dict]:
@@ -261,12 +279,12 @@ def check_io_binding(providers: List[str], use_io_binding: Optional[bool] = None
     """
     Whether to use IOBinding or not.
     """
-    if use_io_binding is None and providers[0] == "CUDAExecutionProvider":
+    if use_io_binding is None and providers[0] in ("CUDAExecutionProvider", "DmlExecutionProvider"):
         use_io_binding = True
-    elif providers[0] != "CPUExecutionProvider" and providers[0] != "CUDAExecutionProvider":
+    elif providers[0] not in ("CPUExecutionProvider", "CUDAExecutionProvider", "DmlExecutionProvider"):
         if use_io_binding is True:
             logger.warning(
-                "No need to enable IO Binding if the provider used is neither CPUExecutionProvider nor CUDAExecutionProvider. IO Binding will be turned off."
+                "No need to enable IO Binding if the provider used is neither CPUExecutionProvider, CUDAExecutionProvider nor DmlExecutionProvider. IO Binding will be turned off."
             )
         use_io_binding = False
 

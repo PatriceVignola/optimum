@@ -300,7 +300,8 @@ class ORTEncoderForSpeech(ORTEncoder):
         use_torch = isinstance(input_features, torch.Tensor)
         self.parent_model.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.parent_model.device.type == "cuda" and self.parent_model.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.parent_model.device.type == "cuda" or self.parent_model.device.type == "privateuseone") and self.parent_model.use_io_binding:
             model_inputs = (
                 [input_features, attention_mask] if "attention_mask" in self.input_names else [input_features]
             )
@@ -359,7 +360,8 @@ class ORTEncoderForVisionEncoderDecoder(ORTEncoder):
         use_torch = isinstance(pixel_values, torch.Tensor)
         self.parent_model.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.parent_model.device.type == "cuda" and self.parent_model.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.parent_model.device.type == "cuda" or self.parent_model.device.type == "privateuseone") and self.parent_model.use_io_binding:
             io_binding, output_shapes, output_buffers = self.parent_model._prepare_io_binding(
                 self.session, pixel_values, ordered_input_names=self._ordered_input_names
             )
@@ -480,7 +482,7 @@ class ORTModelForConditionalGeneration(ORTModel, ABC):
         ABC.__init__(self)
 
         if use_io_binding is None:
-            if decoder_session.get_providers()[0] == "CUDAExecutionProvider":
+            if decoder_session.get_providers()[0] in ("CUDAExecutionProvider", "DmlExecutionProvider"):
                 use_io_binding = True
             else:
                 use_io_binding = False
@@ -523,9 +525,9 @@ class ORTModelForConditionalGeneration(ORTModel, ABC):
 
         if use_cache is False and use_io_binding is True:
             raise ValueError(
-                "When using CUDAExecutionProvider, the parameters combination use_cache=False, use_io_binding=True"
-                " is not supported. Please either pass use_cache=True, use_io_binding=True (default),"
-                " or use_cache=False, use_io_binding=False."
+                "When using CUDAExecutionProvider or DmlExecutionProvider, the parameters combination"
+                " use_cache=False, use_io_binding=True is not supported. Please either pass use_cache=True,"
+                " use_io_binding=True (default), or use_cache=False, use_io_binding=False."
             )
 
         self.use_merged = use_merged

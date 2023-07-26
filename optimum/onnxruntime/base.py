@@ -21,6 +21,7 @@ import torch
 from transformers.modeling_outputs import BaseModelOutput, CausalLMOutputWithCrossAttentions, Seq2SeqLMOutput
 
 from onnxruntime import InferenceSession
+from onnxruntime import OrtValue
 
 from ..utils import NormalizedConfigManager
 from ..utils.logging import warn_once
@@ -82,7 +83,8 @@ class ORTEncoder(ORTModelPart):
         use_torch = isinstance(input_ids, torch.Tensor)
         self.parent_model.raise_on_numpy_input_io_binding(use_torch)
 
-        if self.device.type == "cuda" and self.parent_model.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.device.type == "cuda" or self.device.type == "privateuseone") and self.parent_model.use_io_binding:
             model_inputs = [input_ids]
             if "attention_mask" in self.input_names:
                 model_inputs.append(attention_mask)
@@ -191,7 +193,7 @@ class ORTDecoder(ORTModelPart):
     def prepare_inputs_for_merged(
         self,
         input_ids: Union[None, torch.LongTensor, np.ndarray],
-        past_key_values: Union[None, Tuple[torch.FloatTensor], Tuple[np.ndarray]],
+        past_key_values: Union[None, Tuple[torch.FloatTensor], Tuple[np.ndarray], Tuple[OrtValue]],
         use_torch: bool,
     ):
         if self.parent_model.use_merged:
@@ -242,7 +244,7 @@ class ORTDecoder(ORTModelPart):
         self,
         input_ids: torch.Tensor,
         use_cache_branch: Optional[bool],
-        past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
+        past_key_values: Optional[Tuple[Tuple[Union[torch.FloatTensor, OrtValue]]]] = None,
     ) -> Dict[str, List[int]]:
         """
         Computes the outputs of the past key / value because it is not always easy to perform shape inference on them,
@@ -268,7 +270,11 @@ class ORTDecoder(ORTModelPart):
         if past_key_values is not None and use_cache_branch is not False:
             # Here, use_cache_branch may be None in the case of separate decoder without/with past, or True if the with past branch
             # of a merged decoder is used
-            sequence_length += past_key_values[0].size(2)
+            if isinstance(past_key_values[0], OrtValue):
+                sequence_length += past_key_values[0].shape()[2]
+            else:
+                assert isinstance(past_key_values[0], torch.FloatTensor)
+                sequence_length += past_key_values[0].size(2)
 
         half_shape = [batch_size, num_attention_heads]
         if len(self.expected_key_symbolic_shape) == 3:
@@ -292,7 +298,7 @@ class ORTDecoder(ORTModelPart):
         self,
         input_ids: torch.LongTensor,
         attention_mask: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
+        past_key_values: Optional[Tuple[Tuple[Union[torch.FloatTensor, OrtValue]]]] = None,
         labels: Optional[torch.LongTensor] = None,
         use_cache_branch: None = None,
     ) -> CausalLMOutputWithCrossAttentions:
@@ -354,7 +360,11 @@ class ORTDecoder(ORTModelPart):
             # Tuple of length equal to : number of layer * number of past_key_value per decoder layer(2)
             past_key_values = ()
             for name in self.key_value_output_names:
-                past_key_values += (output_buffers[name].view(output_shapes[name]),)
+                if isinstance(output_buffers[name], OrtValue):
+                    past_key_values += (output_buffers[name],)
+                else:
+                    assert isinstance(output_buffers[name], torch.Tensor)
+                    past_key_values += (output_buffers[name].view(output_shapes[name]),)
 
             # Tuple of tuple of length `n_layers`, with each tuple of length equal to 2 (self-attention key and value per decoder layer)
             num_pkv = 2
@@ -527,7 +537,8 @@ class ORTDecoderForSeq2Seq(ORTDecoder):
             input_ids, past_key_values, use_torch=use_torch
         )
 
-        if self.parent_model.device.type == "cuda" and self.parent_model.use_io_binding:
+        # TODO (pavignol): Make sure that privateuseone is a DML device
+        if (self.parent_model.device.type == "cuda" or self.parent_model.device.type == "privateuseone") and self.parent_model.use_io_binding:
             known_output_shapes = self.compute_past_key_values_output_shapes(
                 input_ids,
                 encoder_hidden_states,

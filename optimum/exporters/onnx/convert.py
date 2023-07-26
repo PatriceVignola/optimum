@@ -276,6 +276,8 @@ def _run_validation(
 
     if device.startswith("cuda"):
         provider = "CUDAExecutionProvider"
+    elif device.startswith("dml"):
+        provider = "DmlExecutionProvider"
     else:
         provider = "CPUExecutionProvider"
 

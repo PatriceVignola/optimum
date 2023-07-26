@@ -153,7 +153,8 @@ class ORTModelDecoder(ORTModel):
                 Whether or not past key/values cache should be used. Defaults to `True`.
             use_io_binding (`Optional[bool]`, defaults to `None`):
                 Whether to use IOBinding during inference to avoid memory copy between the host and devices. Defaults to
-                `True` if the execution provider is CPUExecutionProvider or CUDAExecutionProvider, otherwise defaults to `False`.
+                `True` if the execution provider is CPUExecutionProvider, CUDAExecutionProvider or DmlExecutionProvider,
+                otherwise defaults to `False`.
             model_save_dir (`Optional[Union[str, Path, TemporaryDirectory]]`, defaults to `""`):
                 The directory under which the model exported to ONNX was saved.
             preprocessors (`Optional[List]`, defaults to `None`):
@@ -163,7 +164,7 @@ class ORTModelDecoder(ORTModel):
                 Refer to https://huggingface.co/docs/transformers/main/en/main_classes/text_generation#transformers.GenerationMixin.generate.
         """
         if use_io_binding is None:
-            if decoder_session.get_providers()[0] in ["CPUExecutionProvider", "CUDAExecutionProvider"]:
+            if decoder_session.get_providers()[0] in ["CPUExecutionProvider", "CUDAExecutionProvider", "DmlExecutionProvider"]:
                 use_io_binding = True
             else:
                 use_io_binding = False
@@ -217,9 +218,9 @@ class ORTModelDecoder(ORTModel):
 
         if use_cache is False and use_io_binding is True:
             raise ValueError(
-                "When using CUDAExecutionProvider, the parameters combination use_cache=False, use_io_binding=True"
-                " is not supported. Please either pass use_cache=True, use_io_binding=True (default),"
-                " or use_cache=False, use_io_binding=False."
+                "When using CUDAExecutionProvider or DmlExecutionProvider, the parameters combination"
+                " use_cache=False, use_io_binding=True is not supported. Please either pass use_cache=True,"
+                " use_io_binding=True (default), or use_cache=False, use_io_binding=False."
             )
 
         self.onnx_paths = onnx_paths
@@ -642,7 +643,7 @@ class ORTModelForCausalLM(ORTModelDecoder, GenerationMixin):
         self,
         input_ids: torch.LongTensor = None,
         attention_mask: Optional[torch.FloatTensor] = None,
-        past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
+        past_key_values: Optional[Tuple[Tuple[torch.Tensor, onnxruntime.OrtValue]]] = None,
         labels: Optional[torch.LongTensor] = None,
         **kwargs,
     ) -> CausalLMOutputWithCrossAttentions:

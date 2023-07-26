@@ -4,14 +4,14 @@ import unittest
 import torch
 
 from optimum.onnxruntime.configuration import AutoQuantizationConfig, OptimizationConfig, ORTConfig
-from optimum.onnxruntime.utils import get_device_for_provider, get_provider_for_device
+from optimum.onnxruntime.utils import get_torch_device_for_provider, get_provider_for_device
 
 
 class ProviderAndDeviceGettersTest(unittest.TestCase):
     def test_get_device_for_provider(self):
-        self.assertEqual(get_device_for_provider("CPUExecutionProvider", provider_options={}), torch.device("cpu"))
+        self.assertEqual(get_torch_device_for_provider("CPUExecutionProvider", provider_options={}), torch.device("cpu"))
         self.assertEqual(
-            get_device_for_provider("CUDAExecutionProvider", provider_options={"device_id": 1}), torch.device("cuda:1")
+            get_torch_device_for_provider("CUDAExecutionProvider", provider_options={"device_id": 1}), torch.device("cuda:1")
         )
 
     def test_get_provider_for_device(self):
