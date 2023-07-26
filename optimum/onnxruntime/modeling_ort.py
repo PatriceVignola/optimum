@@ -777,7 +777,7 @@ class ORTModel(OptimizedModel):
                     input_name_to_shape[name] = tensor.shape
 
                     # Since DML doesn't support ORT <-> PyTorch IO binding, a non-ortvalue automatically means
-                    # that the tensor is on the CPU (only happens during the first iteration)
+                    # that the tensor is on the CPU
                     io_binding.bind_cpu_input(name, tensor.numpy())
             else:
                 assert isinstance(tensor, torch.Tensor)
