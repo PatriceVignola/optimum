@@ -275,6 +275,8 @@ def _run_validation(
 
     if device.startswith("cuda"):
         provider = "CUDAExecutionProvider"
+    elif device.startswith("dml"):
+        provider = "DmlExecutionProvider"
     else:
         provider = "CPUExecutionProvider"
 
@@ -314,7 +316,7 @@ def _run_validation(
 
     # Compute outputs from the reference model
     if is_torch_available() and isinstance(reference_model, nn.Module):
-        reference_model.to(device)
+        reference_model.to(device if device != "dml" else "cpu")
 
         for key, value in reference_model_inputs.items():
             reference_model_inputs[key] = recursive_to_device(value=value, device=device)
@@ -542,7 +544,7 @@ def export_pytorch(
         # Check that inputs match, and order them properly
         dummy_inputs = config.generate_dummy_inputs(framework="pt", **input_shapes)
 
-        device = torch.device(device)
+        device = torch.device(device if device != "dml" else "cpu")
 
         def remap(value):
             if isinstance(value, torch.Tensor):

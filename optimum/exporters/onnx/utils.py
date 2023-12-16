@@ -500,7 +500,7 @@ def recursive_to_device(value: Union[Tuple, List, "torch.Tensor"], device: str):
         for i, val in enumerate(value):
             value[i] = recursive_to_device(val, device)
     elif isinstance(value, torch.Tensor):
-        value = value.to(device)
+        value = value.to(device if device != "dml" else "cpu")
 
     return value
 

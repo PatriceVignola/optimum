@@ -298,6 +298,8 @@ class OnnxConfig(ExportConfig, ABC):
 
         if device.startswith("cuda"):
             providers = ["CUDAExecutionProvider"]
+        elif device.startswith("dml"):
+            providers = ["DmlExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
 

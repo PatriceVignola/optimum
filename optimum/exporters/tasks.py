@@ -1805,9 +1805,9 @@ class TasksManager:
                 if framework == "pt":
                     kwargs["torch_dtype"] = torch_dtype
 
-                    if isinstance(device, str):
+                    if isinstance(device, str) and device != "dml":
                         device = torch.device(device)
-                    elif device is None:
+                    elif device is None or device == "dml":
                         device = torch.device("cpu")
 
                     # TODO : fix EulerDiscreteScheduler loading to enable for SD models
